@@ -7,7 +7,6 @@ import (
 	"html"
 	"io"
 	"net/http"
-	"os"
 	"redditwordcloud/pkg/retryhttp"
 	"redditwordcloud/pkg/util"
 	"regexp"
@@ -38,6 +37,7 @@ const (
 	maxMoreChildrenLimit   = 100
 	getCommentArticleLimit = 4
 	redditRps              = 2
+	NotFoundMessage        = "{\"message\": \"Not Found\", \"error\": 404}"
 )
 
 // Credentials are used to authenticate to make requests to the Reddit API.
@@ -99,7 +99,7 @@ type RedditMoreChildrenObject struct {
 }
 
 type RedditListingObject struct {
-	Children []RedditResponse `json:"children"`
+	Children []RedditResponse `json:"children,omitempty"`
 }
 
 type RedditResponse struct {
@@ -223,11 +223,10 @@ func (svc *service) processRedditResponse(c context.Context, redditResponse Redd
 			go func(words cmap.ConcurrentMap[string, int]) {
 				defer wg.Done()
 				parentIdNoPrefix := strings.Split(redditResponse.Data.(*RedditMoreObject).ParentId, "_")[1]
-				redditResponses := svc.getCommentArticleResp(parentIdNoPrefix, link)
+				redditResponses, _ := svc.getCommentArticleResp(parentIdNoPrefix, link)
 				for _, resp := range redditResponses {
 					svc.processRedditResponse(c, resp, words, link)
 				}
-
 			}(words)
 			wg.Wait()
 			return
@@ -363,20 +362,15 @@ func createLink(link string) *Link {
 func (svc *service) GetRedditThreadWordsByLink(c context.Context, req *GetRedditThreadWordsByLinkReq, txn *newrelic.Transaction) (*GetRedditThreadWordsRes, error) {
 	link := createLink(req.Link)
 	linkStr := fmt.Sprintf("%s/%s/%s/comments/%s", link.Protocol, link.DomainName, link.Subreddit, link.CommentId)
-	oldRedditlinkStr := fmt.Sprintf("%s/%s/%s/comments/%s", link.Protocol, fmt.Sprintf("old.%s", link.DomainName), link.Subreddit, link.CommentId)
 	scid := fmt.Sprintf("%s/comments/%s", link.Subreddit, link.CommentId)
 
 	svc.rl.Take()
-	zap.S().Info(oldRedditlinkStr)
-	resp, err := http.Get(oldRedditlinkStr)
+	redditResponses, err := svc.getCommentArticleResp(link.CommentId, link)
 
-	if err != nil || resp.StatusCode != 200 {
+	if len(redditResponses) == 0 || err != nil {
 		if err != nil {
-			return nil, fmt.Errorf("non 200 GET request to link: %s", err.Error())
+			return nil, fmt.Errorf("could not get comments for link: %s, err: %w", linkStr, err)
 		}
-		body, _ := io.ReadAll(resp.Body)
-		return nil, fmt.Errorf("non 200 GET request to link: %s", string(body))
-
 	}
 
 	zap.S().Debugf("Checking if scid %s exists in db...", scid)
@@ -399,47 +393,8 @@ func (svc *service) GetRedditThreadWordsByLink(c context.Context, req *GetReddit
 	}
 	segment.End()
 
-	segment = txn.StartSegment(fmt.Sprintf("%s.json req", linkStr))
-	redditReq, err := http.NewRequest("GET", fmt.Sprintf("%s.json", linkStr), nil)
-
-	if err != nil {
-		zap.S().Errorf("Could not create reddit request: ", err)
-	}
-
-	svc.rl.Take()
-	zap.S().Debugf("Getting thread words for link %s/%s/%s/comments/%s...", link.Protocol, link.DomainName, link.Subreddit, link.CommentId)
-	redditReq.Header.Set("User-Agent", "redditwordcloud/1.0")
-
-	res, err := svc.client.Do(redditReq)
-
-	if err != nil {
-		zap.S().Errorf("client: could not do request: %w", err)
-		os.Exit(1)
-		return nil, fmt.Errorf("client: could not do request: %w", err)
-	}
-
-	zap.S().Debugf("Successful GET request to %s.", fmt.Sprintf("%s.json", linkStr))
-	segment.End()
-
-	defer res.Body.Close()
-	body, err := io.ReadAll(res.Body)
-
-	if err != nil {
-		zap.S().Error("Error reading the response body:", err)
-		return nil, fmt.Errorf("could not insert empty map into MongoDB: %w", err)
-	}
-
-	var RedditResponses []RedditResponse
-
-	err = json.Unmarshal(body, &RedditResponses)
-
-	if err != nil {
-		zap.S().Error("Error unmarshaling res to JSON:", err)
-		zap.S().Debug(string(body))
-		return nil, fmt.Errorf("error unmarshaling res to JSON: %w", err)
-	}
-
-	for _, rr := range RedditResponses {
+	defer txn.StartSegment(fmt.Sprintf("Process RedditResponses for article %s", scid))
+	for _, rr := range redditResponses {
 		go func(rr RedditResponse) {
 			svc.processRedditResponse(c, rr, cmap.New[int](), link)
 		}(rr)
@@ -448,7 +403,7 @@ func (svc *service) GetRedditThreadWordsByLink(c context.Context, req *GetReddit
 	return &GetRedditThreadWordsRes{Success: true, Words: nil, Link: link.CommentId}, nil
 }
 
-func (svc *service) getCommentArticleResp(commentId string, link *Link) []RedditResponse {
+func (svc *service) getCommentArticleResp(commentId string, link *Link) ([]RedditResponse, error) {
 	redditReq, err := http.NewRequest("GET", fmt.Sprintf("%s/%s/comments/article", defaultBaseURL, link.Subreddit), nil)
 
 	if err != nil {
@@ -477,7 +432,11 @@ func (svc *service) getCommentArticleResp(commentId string, link *Link) []Reddit
 
 	if err != nil {
 		zap.S().Error("Error reading the response body:", err)
-		return nil
+		return nil, err
+	}
+
+	if string(body) == NotFoundMessage {
+		return nil, fmt.Errorf("could not find reddit thread %s", link.CommentId)
 	}
 
 	// zap.S().Debugf("Body: %s", body)
@@ -489,8 +448,8 @@ func (svc *service) getCommentArticleResp(commentId string, link *Link) []Reddit
 	if err != nil {
 		zap.S().Error("Error unmarshaling res to JSON:", err)
 		zap.S().Debug(string(body))
-		return svc.getCommentArticleResp(commentId, link)
+		return nil, fmt.Errorf("error unmarshaling res to JSON: %w", err)
 	}
 
-	return CommentArticleAPIResponse
+	return CommentArticleAPIResponse, nil
 }
