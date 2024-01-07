@@ -363,10 +363,12 @@ func createLink(link string) *Link {
 func (svc *service) GetRedditThreadWordsByLink(c context.Context, req *GetRedditThreadWordsByLinkReq, txn *newrelic.Transaction) (*GetRedditThreadWordsRes, error) {
 	link := createLink(req.Link)
 	linkStr := fmt.Sprintf("%s/%s/%s/comments/%s", link.Protocol, link.DomainName, link.Subreddit, link.CommentId)
+	oldRedditlinkStr := fmt.Sprintf("%s/%s/%s/comments/%s", link.Protocol, fmt.Sprintf("old.%s", link.DomainName), link.Subreddit, link.CommentId)
 	scid := fmt.Sprintf("%s/comments/%s", link.Subreddit, link.CommentId)
 
 	svc.rl.Take()
-	resp, err := http.Get(linkStr)
+	zap.S().Info(oldRedditlinkStr)
+	resp, err := http.Get(oldRedditlinkStr)
 
 	if err != nil || resp.StatusCode != 200 {
 		if err != nil {
