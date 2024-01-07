@@ -27,13 +27,13 @@ func InitRouter(healthHandler *health.Handler, redditHandler *reddit.Handler, nr
 	r.Use(nrgin.Middleware(nrc.Client))
 
 	r.Use(cors.New(cors.Config{
-		AllowOrigins:     []string{"http://localhost:3000"},
+		AllowOrigins:     []string{"http://localhost:3000", "https://redditworldcloud-api.onrender.com"},
 		AllowMethods:     []string{"GET", "POST"},
 		AllowHeaders:     []string{"Content-Type"},
 		ExposeHeaders:    []string{"Content-Length"},
 		AllowCredentials: true,
 		AllowOriginFunc: func(origin string) bool {
-			return origin == "http://localhost:3000"
+			return origin == "http://localhost:3000" || origin == "https://redditworldcloud-api.onrender.com"
 		},
 		MaxAge: 12 * time.Hour,
 	}))

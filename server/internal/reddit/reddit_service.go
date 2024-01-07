@@ -369,7 +369,7 @@ func (svc *service) GetRedditThreadWordsByLink(c context.Context, req *GetReddit
 	resp, err := http.Get(linkStr)
 
 	if err != nil || resp.StatusCode != 200 {
-		return nil, fmt.Errorf("non 200 GET request to link: %w", err.Error())
+		return nil, fmt.Errorf("non 200 GET request to link: %s", err.Error())
 	}
 
 	zap.S().Debugf("Checking if scid %s exists in db...", scid)
