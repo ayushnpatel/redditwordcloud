@@ -373,7 +373,7 @@ func (svc *service) GetRedditThreadWordsByLink(c context.Context, req *GetReddit
 			return nil, fmt.Errorf("non 200 GET request to link: %s", err.Error())
 		}
 		body, _ := io.ReadAll(resp.Body)
-		return nil, fmt.Errorf("non 200 GET request to link: %s", body)
+		return nil, fmt.Errorf("non 200 GET request to link: %s", string(body))
 
 	}
 
