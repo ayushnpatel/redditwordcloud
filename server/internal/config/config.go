@@ -1,14 +1,15 @@
 package config
 
 import (
-	"fmt"
 	"log"
-	"os"
 	"path"
 	"path/filepath"
+	"redditwordcloud/internal/mongodb"
+	"redditwordcloud/internal/newrelic"
+	"redditwordcloud/internal/reddit"
 	"runtime"
-	"strconv"
 
+	"github.com/caarlos0/env/v10"
 	"github.com/joho/godotenv"
 )
 
@@ -18,8 +19,11 @@ type EnvironmentConfig struct {
 }
 
 type Config struct {
-	LogLevel string `env:"LOG_LEVEL"`
-	Env      string `env:"ENV"`
+	LogLevel       string `env:"LOG_LEVEL,required"`
+	Env            string `env:"ENV,required"`
+	MongoDBConfig  mongodb.MongoDBConfig
+	RedditConfig   reddit.RedditConfig     `envPrefix:"REDDIT_"`
+	NewRelicConfig newrelic.NewRelicConfig `envPrefix:"NEW_RELIC_"`
 }
 
 const (
@@ -35,7 +39,6 @@ var (
 
 func init() {
 	// loads values from .env into the system
-	fmt.Println(path.Join(basepath, "../../.env"))
 	if err := godotenv.Load(path.Join(basepath, "../../.env")); err != nil {
 		log.Print("No .env file found")
 	}
@@ -43,37 +46,16 @@ func init() {
 
 // New returns a new Config struct
 func Load() *Config {
-	return &Config{
-		LogLevel: GetEnv("LOG_LEVEL", "Debug"),
-		Env:      GetEnv("ENV", "LOCAL"),
-	}
-}
 
-// Simple helper function to read an environment or return a default value
-func GetEnv(key string, defaultVal string) string {
-	if value, exists := os.LookupEnv(key); exists {
-		return value
+	cfg := Config{}
+
+	if err := godotenv.Load(); err != nil {
+		panic(err)
 	}
 
-	return defaultVal
-}
-
-// Simple helper function to read an environment variable into integer or return a default value
-func getEnvAsInt(name string, defaultVal int) int {
-	valueStr := GetEnv(name, "")
-	if value, err := strconv.Atoi(valueStr); err == nil {
-		return value
+	if err := env.Parse(&cfg); err != nil {
+		panic(err)
 	}
 
-	return defaultVal
-}
-
-// Helper to read an environment variable into a bool or return default value
-func getEnvAsBool(name string, defaultVal bool) bool {
-	valStr := GetEnv(name, "")
-	if val, err := strconv.ParseBool(valStr); err == nil {
-		return val
-	}
-
-	return defaultVal
+	return &cfg
 }

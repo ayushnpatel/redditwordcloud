@@ -2,6 +2,7 @@ package router
 
 import (
 	"redditwordcloud/internal/health"
+	"redditwordcloud/internal/newrelic"
 	"redditwordcloud/internal/reddit"
 	"time"
 
@@ -9,6 +10,7 @@ import (
 	"github.com/gin-gonic/gin"
 	"github.com/gin-gonic/gin/binding"
 	"github.com/go-playground/validator/v10"
+	"github.com/newrelic/go-agent/v3/integrations/nrgin"
 )
 
 var r *gin.Engine
@@ -18,8 +20,11 @@ const (
 	GetRedditThreadWordsByLinkPath = "/reddit/words/link"
 )
 
-func InitRouter(healthHandler *health.Handler, redditHandler *reddit.Handler) {
+func InitRouter(healthHandler *health.Handler, redditHandler *reddit.Handler, nrc *newrelic.NewRelicClient) {
+
 	r = gin.Default()
+	// Add the nrgin middleware before other middlewares or routes:
+	r.Use(nrgin.Middleware(nrc.Client))
 
 	r.Use(cors.New(cors.Config{
 		AllowOrigins:     []string{"http://localhost:3000"},

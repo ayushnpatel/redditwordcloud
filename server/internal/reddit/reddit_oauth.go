@@ -63,15 +63,13 @@ func (s *oauthTokenSource) Token() (*oauth2.Token, error) {
 
 }
 
-func oauthTransport(client *http.Client, creds *Credentials) http.RoundTripper {
+func oauthTransport(client *http.Client, rcfg RedditConfig) http.RoundTripper {
 	httpClient := retryhttp.NewRetryableClient()
 	ctx := context.WithValue(context.Background(), oauth2.HTTPClient, httpClient)
 
-	oauth2.SetAuthURLParam("grant_type", "client_credentials")
-
 	config := &oauth2.Config{
-		ClientID:     creds.ID,
-		ClientSecret: creds.Secret,
+		ClientID:     rcfg.ID,
+		ClientSecret: rcfg.Secret,
 		Endpoint: oauth2.Endpoint{
 			TokenURL:  defaultTokenURL,
 			AuthStyle: oauth2.AuthStyleInHeader,
@@ -81,8 +79,8 @@ func oauthTransport(client *http.Client, creds *Credentials) http.RoundTripper {
 	tokenSource := oauth2.ReuseTokenSource(nil, &oauthTokenSource{
 		ctx:      ctx,
 		config:   config,
-		username: creds.ID,
-		password: creds.Secret,
+		username: rcfg.ID,
+		password: rcfg.Secret,
 	})
 
 	return &oauth2.Transport{

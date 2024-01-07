@@ -29,3 +29,25 @@ func IsInLastWeek(t time.Time) bool {
 	// Check if the duration is within the last week (7 days)
 	return duration.Seconds() <= 7*24*60*60
 }
+
+func CombineMaps(map1, map2 map[string]int) map[string]int {
+	result := make(map[string]int)
+
+	// Copy the values from the first map
+	for key, value := range map1 {
+		result[key] = value
+	}
+
+	// Add or update values from the second map
+	for key, value := range map2 {
+		if existingValue, ok := result[key]; ok {
+			// Key already exists, add the values
+			result[key] = existingValue + value
+		} else {
+			// Key doesn't exist, add a new entry
+			result[key] = value
+		}
+	}
+
+	return result
+}

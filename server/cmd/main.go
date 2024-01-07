@@ -1,8 +1,10 @@
 package main
 
 import (
-	config "redditwordcloud/internal/config"
+	"redditwordcloud/internal/config"
 	"redditwordcloud/internal/health"
+	"redditwordcloud/internal/mongodb"
+	"redditwordcloud/internal/newrelic"
 	"redditwordcloud/internal/reddit"
 	"redditwordcloud/router"
 
@@ -11,6 +13,7 @@ import (
 )
 
 func init() {
+
 	cfg := config.Load()
 
 	if cfg.Env == config.Local || cfg.Env == config.Dev {
@@ -25,6 +28,8 @@ func init() {
 		zap.ReplaceGlobals(zap.Must(config.Build()))
 	}
 
+	zap.S().Info("Config and Logger initialized!")
+
 }
 
 func main() {
@@ -33,16 +38,17 @@ func main() {
 	// 	log.Fatalf("could not initialize database connection: %s", err)
 	// }
 
-	zap.S().Info("Initializing config...")
+	cfg := config.Load()
+	nrc := newrelic.New(cfg.NewRelicConfig)
+	mdbc := mongodb.New(cfg.MongoDBConfig)
+	defer mdbc.Disconnect()
 
-	redditRep := reddit.NewRepository()
-	defer redditRep.Disconnect()
-
-	redditSvc := reddit.NewService(redditRep)
+	redditRep := reddit.NewRepository(mdbc, nrc)
+	redditSvc := reddit.NewService(cfg.RedditConfig, redditRep)
 	redditHandler := reddit.NewHandler(redditSvc)
 
 	healthHandler := health.NewHandler()
 
-	router.InitRouter(healthHandler, redditHandler)
+	router.InitRouter(healthHandler, redditHandler, nrc)
 	router.Start("0.0.0.0:8080")
 }

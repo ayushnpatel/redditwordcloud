@@ -8,7 +8,6 @@ import (
 	"io"
 	"net/http"
 	"os"
-	"redditwordcloud/internal/config"
 	"redditwordcloud/pkg/retryhttp"
 	"redditwordcloud/pkg/util"
 	"regexp"
@@ -17,6 +16,7 @@ import (
 	"sync"
 	"time"
 
+	"github.com/newrelic/go-agent/v3/newrelic"
 	cmap "github.com/orcaman/concurrent-map/v2"
 	"go.uber.org/ratelimit"
 	"go.uber.org/zap"
@@ -28,7 +28,7 @@ type service struct {
 	client       *http.Client
 	redditClient *http.Client
 	rl           ratelimit.Limiter
-	creds        *Credentials
+	rcfg         RedditConfig
 }
 
 const (
@@ -37,7 +37,7 @@ const (
 	defaultTokenURL        = "https://www.reddit.com/api/v1/access_token"
 	maxMoreChildrenLimit   = 100
 	getCommentArticleLimit = 4
-	rps                    = 2
+	redditRps              = 2
 )
 
 // Credentials are used to authenticate to make requests to the Reddit API.
@@ -48,17 +48,9 @@ type Credentials struct {
 	Password string
 }
 
-func NewService(repository Repository) Service {
+func NewService(rcfg RedditConfig, repository Repository) Service {
 	c := retryhttp.NewRetryableClient()
-
-	creds := &Credentials{
-		ID:       config.GetEnv("REDDIT_CLIENT_ID", ""),
-		Secret:   config.GetEnv("REDDIT_CLIENT_SECRET", ""),
-		Username: config.GetEnv("REDDIT_USERNAME", ""),
-		Password: config.GetEnv("REDDIT_PASSWORD", ""),
-	}
-
-	oauthTransport := oauthTransport(c, creds)
+	oauthTransport := oauthTransport(c, rcfg)
 	c.Transport = oauthTransport
 
 	return &service{
@@ -66,8 +58,8 @@ func NewService(repository Repository) Service {
 		timeout:      time.Duration(2) * time.Second,
 		client:       retryhttp.NewRetryableClient(),
 		redditClient: c,
-		rl:           ratelimit.New(rps),
-		creds:        creds,
+		rl:           ratelimit.New(redditRps),
+		rcfg:         rcfg,
 	}
 }
 
@@ -94,6 +86,7 @@ type RedditMoreObject struct {
 	Children []string `json:"children"`
 	ParentId string   `json:"parent_id"`
 	Id       string   `json:"id"`
+	Depth    int      `json:"depth"`
 }
 
 type RedditMoreChildrenObject struct {
@@ -194,7 +187,20 @@ func (rro *RedditRepliesObject) UnmarshalJSON(data []byte) error {
 	return nil
 }
 
-func (svc *service) processRedditResponse(c context.Context, redditResponse RedditResponse, words *cmap.ConcurrentMap[string, int], link *Link, depth int) {
+func (svc *service) upsertWords(c context.Context, words cmap.ConcurrentMap[string, int], link *Link) {
+	scid := fmt.Sprintf("%s/comments/%s", link.Subreddit, link.CommentId)
+	m := words.Items()
+
+	if len(m) != 0 {
+		if err := svc.Repository.Upsert(c, m, scid); err != nil {
+			zap.S().Errorf("could not upsert words for linkId: %s\n", link.CommentId)
+			return
+		}
+		zap.S().Debugf("Upserted Word Map with %d entries.", len(m))
+	}
+}
+
+func (svc *service) processRedditResponse(c context.Context, redditResponse RedditResponse, words cmap.ConcurrentMap[string, int], link *Link) {
 
 	if redditResponse.Data == nil || redditResponse.Kind == "t3" {
 		return
@@ -205,16 +211,31 @@ func (svc *service) processRedditResponse(c context.Context, redditResponse Redd
 	switch redditResponse.Kind {
 	case "Listing":
 		children := redditResponse.Data.(*RedditListingObject).Children
+		words := cmap.New[int]()
 		for _, child := range children {
-			wg.Add(1)
-			go func(ch RedditResponse) {
-				defer wg.Done()
-				svc.processRedditResponse(c, ch, words, link, depth)
-			}(child)
+			svc.processRedditResponse(c, child, words, link)
 		}
+		svc.upsertWords(c, words, link)
 	case "more":
+		if len(redditResponse.Data.(*RedditMoreObject).Children) == 0 {
+			wg.Add(1)
+			words := cmap.New[int]()
+			go func(words cmap.ConcurrentMap[string, int]) {
+				defer wg.Done()
+				parentIdNoPrefix := strings.Split(redditResponse.Data.(*RedditMoreObject).ParentId, "_")[1]
+				redditResponses := svc.getCommentArticleResp(parentIdNoPrefix, link)
+				for _, resp := range redditResponses {
+					svc.processRedditResponse(c, resp, words, link)
+				}
+
+			}(words)
+			wg.Wait()
+			return
+		}
+
 		childrenChunks := util.ChunkStringSlice(redditResponse.Data.(*RedditMoreObject).Children, maxMoreChildrenLimit)
 		parentId := redditResponse.Data.(*RedditMoreObject).ParentId
+
 		for _, chunk := range childrenChunks {
 			wg.Add(1)
 			go func(children []string, parentId string) {
@@ -240,7 +261,7 @@ func (svc *service) processRedditResponse(c context.Context, redditResponse Redd
 
 				if err != nil {
 					zap.S().Debugf("Error c.Do: %w, reprocessing reddit response...", err)
-					svc.processRedditResponse(c, redditResponse, words, link, depth)
+					svc.processRedditResponse(c, redditResponse, cmap.New[int](), link)
 				}
 
 				zap.S().Debugf("Successful GET request.")
@@ -264,78 +285,26 @@ func (svc *service) processRedditResponse(c context.Context, redditResponse Redd
 					return
 				}
 
+				words := cmap.New[int]()
 				for _, child := range MoreChildrenAPIResponse.JSON.Data.Things {
-
-					if strings.HasPrefix(parentId, "t3") {
-						// Parent is the link, thus we are getting the extra comments of the thread.
-						svc.processRedditResponse(c, child, words, link, depth)
-					} else {
-						// Parent is a comment, thus we are getting the extra comments of the comment thread.
-						svc.processRedditResponse(c, child, words, link, depth+1)
-
-					}
+					svc.processRedditResponse(c, child, words, link)
 				}
-
+				svc.upsertWords(c, words, link)
 			}(chunk, parentId)
 		}
+		wg.Wait()
+		return
 	default:
 		repliesResp := redditResponse.Data.(*RedditRepliesObject).Replies
-		commentId := redditResponse.Data.(*RedditRepliesObject).Id
-
-		wg.Add(1)
-		go func(ch RedditResponse) {
-			defer wg.Done()
-			svc.processRedditResponse(c, ch, words, link, depth+1)
-		}(repliesResp)
-
-		if depth == getCommentArticleLimit {
-			redditResponses := svc.getCommentArticleResp(commentId, link)
-			for _, resp := range redditResponses {
-				wg.Add(1)
-				go func(ch RedditResponse) {
-					defer wg.Done()
-					svc.processRedditResponse(c, ch, words, link, depth+1)
-				}(resp)
-			}
-			wg.Wait()
-			return
-		}
+		svc.processRedditResponse(c, repliesResp, words, link)
 
 		body := redditResponse.Data.(*RedditRepliesObject).Body
-		// if strings.Contains(body, "ever have become billionaires.") {
-		// 	zap.S().Debug(repliesResp)
-		// }
-		// if strings.Contains(body, "Number is going to balloon here soon ") {
-		// 	zap.S().Debug(repliesResp)
-		// }
-		// if strings.Contains(body, "It took 20 years to go from 30m deals to 13") {
-		// 	zap.S().Debug(repliesResp)
-		// }
-		// if strings.Contains(body, "There are 300m+ deals already") {
-		// 	zap.S().Debug(repliesResp)
-		// }
-		// if strings.Contains(body, "deal, not the annual salary.") {
-		// 	zap.S().Debug(repliesResp)
-		// }
-		// if strings.Contains(body, "About 500m after taxes and before") {
-		// 	zap.S().Debug(repliesResp)
-		// }
-		// if strings.Contains(body, "other projects, compound interest. where does that get") {
-		// 	zap.S().Debug(repliesResp)
-		// }
-		// if strings.Contains(body, "the one who said they could get there through salary alone") {
-		// 	zap.S().Debug(repliesResp)
-		// }
-		// if strings.Contains(body, " will be close to 1 billion in salary. I didn't say NET") {
-		// 	zap.S().Debug(repliesResp)
-		// }
 		htmlUnescapedBody := html.UnescapeString(body)
 		cleanedBody := cleanBody(strconv.Quote(htmlUnescapedBody))
 
 		for _, word := range strings.Split(cleanedBody, " ") {
 			lowerCaseWord := strings.ToLower(word)
 			cwc, b := words.Get(lowerCaseWord)
-
 			if b {
 				words.Set(lowerCaseWord, cwc+1)
 			} else {
@@ -343,7 +312,6 @@ func (svc *service) processRedditResponse(c context.Context, redditResponse Redd
 			}
 		}
 	}
-
 	wg.Wait()
 
 }
@@ -392,24 +360,39 @@ func createLink(link string) *Link {
 	}
 }
 
-func (svc *service) GetRedditThreadWordsByLink(c context.Context, req *GetRedditThreadWordsByLinkReq) (*GetRedditThreadWordsRes, error) {
+func (svc *service) GetRedditThreadWordsByLink(c context.Context, req *GetRedditThreadWordsByLinkReq, txn *newrelic.Transaction) (*GetRedditThreadWordsRes, error) {
 	link := createLink(req.Link)
 	linkStr := fmt.Sprintf("%s/%s/%s/comments/%s", link.Protocol, link.DomainName, link.Subreddit, link.CommentId)
 	scid := fmt.Sprintf("%s/comments/%s", link.Subreddit, link.CommentId)
 
+	svc.rl.Take()
+	resp, err := http.Get(linkStr)
+
+	if err != nil || resp.StatusCode != 200 {
+		return nil, fmt.Errorf("non 200 GET request to link")
+	}
+
 	zap.S().Debugf("Checking if scid %s exists in db...", scid)
 
+	segment := txn.StartSegment(fmt.Sprintf("scid %s check", scid))
 	if wordDocument, err := svc.Repository.GetWordsFromLink(c, scid); err == nil {
 		if wordDocument != nil {
 			if util.IsInLastWeek(wordDocument.LastUpdated.Time()) {
 				zap.S().Debugf("Retrieved word document for %s from MongoDB Words Collection.", scid)
-				return &GetRedditThreadWordsRes{Words: wordDocument.Words, Link: link.CommentId}, nil
+				return &GetRedditThreadWordsRes{Words: wordDocument.Words, Success: true, Link: link.CommentId}, nil
 			}
+		} else {
+			zap.S().Debugf("Scid %s does not exist in db. Inserting with empty map.", scid)
+			if _, err := svc.Repository.InsertWords(c, make(map[string]int), scid); err != nil {
+				zap.S().Errorf("Could not insert empty map into MongoDB: %w", err)
+				return nil, fmt.Errorf("could not insert empty map into MongoDB: %w", err)
+			}
+			zap.S().Debug("Created Word Map with 0 entries.")
 		}
 	}
+	segment.End()
 
-	zap.S().Debugf("Scid %s does not exist in db.", scid)
-
+	segment = txn.StartSegment(fmt.Sprintf("%s.json req", linkStr))
 	redditReq, err := http.NewRequest("GET", fmt.Sprintf("%s.json", linkStr), nil)
 
 	if err != nil {
@@ -423,18 +406,20 @@ func (svc *service) GetRedditThreadWordsByLink(c context.Context, req *GetReddit
 	res, err := svc.client.Do(redditReq)
 
 	if err != nil {
-		zap.S().Errorf("client: could not create request: %s\n", err)
+		zap.S().Errorf("client: could not do request: %w", err)
 		os.Exit(1)
+		return nil, fmt.Errorf("client: could not do request: %w", err)
 	}
 
 	zap.S().Debugf("Successful GET request to %s.", fmt.Sprintf("%s.json", linkStr))
+	segment.End()
 
 	defer res.Body.Close()
 	body, err := io.ReadAll(res.Body)
 
 	if err != nil {
 		zap.S().Error("Error reading the response body:", err)
-		return nil, nil
+		return nil, fmt.Errorf("could not insert empty map into MongoDB: %w", err)
 	}
 
 	var RedditResponses []RedditResponse
@@ -444,20 +429,16 @@ func (svc *service) GetRedditThreadWordsByLink(c context.Context, req *GetReddit
 	if err != nil {
 		zap.S().Error("Error unmarshaling res to JSON:", err)
 		zap.S().Debug(string(body))
-		return nil, nil
+		return nil, fmt.Errorf("error unmarshaling res to JSON: %w", err)
 	}
-
-	words := cmap.New[int]()
 
 	for _, rr := range RedditResponses {
-		svc.processRedditResponse(c, rr, &words, link, 0)
+		go func(rr RedditResponse) {
+			svc.processRedditResponse(c, rr, cmap.New[int](), link)
+		}(rr)
 	}
 
-	m := words.Items()
-	zap.S().Infof("Created Word Map with %d entries.", len(m))
-	svc.Repository.InsertWords(c, &m, scid)
-
-	return &GetRedditThreadWordsRes{Words: m, Link: link.CommentId}, nil
+	return &GetRedditThreadWordsRes{Success: true, Words: nil, Link: link.CommentId}, nil
 }
 
 func (svc *service) getCommentArticleResp(commentId string, link *Link) []RedditResponse {
@@ -492,7 +473,7 @@ func (svc *service) getCommentArticleResp(commentId string, link *Link) []Reddit
 		return nil
 	}
 
-	zap.S().Debugf("Body: %s", body)
+	// zap.S().Debugf("Body: %s", body)
 
 	var CommentArticleAPIResponse []RedditResponse
 

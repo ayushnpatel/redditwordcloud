@@ -1,14 +1,13 @@
 package reddit
 
 import (
-	"encoding/json"
-	"fmt"
 	"net/http"
 	"net/url"
 	"redditwordcloud/pkg/retryhttp"
 
 	"github.com/gin-gonic/gin"
 	"github.com/go-playground/validator/v10"
+	"github.com/newrelic/go-agent/v3/newrelic"
 )
 
 type Handler struct {
@@ -37,39 +36,33 @@ func (h *Handler) GetRedditThreadWordsByThreadIDHandler(c *gin.Context) {
 
 func ValidateLink(fl validator.FieldLevel) bool {
 	link := fl.Field().String()
-
 	_, err := url.ParseRequestURI(link)
-
-	if err != nil {
-		return false
-	}
-	return true
+	return err == nil
 }
 
 func (h *Handler) GetRedditThreadWordsByLinkHandler(c *gin.Context) {
+	txn := newrelic.FromContext(c)
 	var req GetRedditThreadWordsByLinkReq
 
+	segment := txn.StartSegment("BindJSON")
 	if err := c.ShouldBindJSON(&req); err != nil {
 		c.JSON(http.StatusBadRequest, gin.H{"error": err.Error()})
 		return
 	}
+	segment.End()
 
-	res, err := h.Service.GetRedditThreadWordsByLink(c, &req)
-
-	if err != nil {
-		c.JSON(http.StatusInternalServerError, fmt.Errorf("err: %w", err))
-	}
-
-	wordsJson, err := json.Marshal(res.Words)
+	segment = txn.StartSegment("GetRedditThreadWordsByLink Service")
+	res, err := h.Service.GetRedditThreadWordsByLink(c, &req, txn)
+	segment.End()
 
 	if err != nil {
-		c.JSON(http.StatusInternalServerError, fmt.Errorf("err: %w", err))
+		c.JSON(http.StatusInternalServerError, gin.H{"error": err.Error()})
+		return
 	}
 
 	// Set the response content type to JSON
 	c.Header("Content-Type", "application/json")
 
 	// Write the JSON data to the response body
-	c.Writer.WriteHeader(http.StatusOK)
-	c.Writer.Write(wordsJson)
+	c.JSON(http.StatusOK, res)
 }

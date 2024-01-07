@@ -2,75 +2,47 @@ package reddit
 
 import (
 	"context"
-	"redditwordcloud/internal/config"
+	"fmt"
+	"redditwordcloud/internal/mongodb"
+	"redditwordcloud/internal/newrelic"
+	"redditwordcloud/pkg/util"
+	"sync"
 	"time"
 
 	"go.mongodb.org/mongo-driver/bson"
 	"go.mongodb.org/mongo-driver/bson/primitive"
 	"go.mongodb.org/mongo-driver/mongo"
-	"go.mongodb.org/mongo-driver/mongo/options"
 	"go.uber.org/zap"
 )
 
-type MongoDBClient interface {
-	Connect()
-	Disconnect()
-}
-
 type repository struct {
-	client          *mongo.Client
+	upsertMu        sync.Mutex
 	wordsCollection *mongo.Collection
+	nrc             *newrelic.NewRelicClient
 }
 
-const (
-	MongoDBConnectionString = "MONGODB_CONNECTION_STRING"
-	WordsCollectionName     = "WORDS_COLLECTION_NAME"
-	DatabaseName            = "DATABASE_NAME"
-)
+func NewRepository(mdbc *mongodb.MongoDBClient, nrc *newrelic.NewRelicClient) Repository {
 
-func NewRepository() Repository {
-	var mongoUri = config.GetEnv(MongoDBConnectionString, "")
+	collection := mdbc.Client.Database(mdbc.Config.DatabaseName).Collection(mdbc.Config.CollectionName)
 
-	if mongoUri == "" {
-		return nil
-	}
-
-	zap.S().Info("Connecting to MongoDB...")
-
-	ctx, cancel := context.WithTimeout(context.Background(), 10*time.Second)
-	defer cancel()
-	client, err := mongo.Connect(ctx, options.Client().ApplyURI(
-		mongoUri,
-	))
-
-	err = client.Ping(ctx, nil)
-
-	if err != nil {
-		zap.S().Error("There was a problem connecting to your Atlas cluster. Check that the URI includes a valid username and password, and that your IP address has been added to the access list. Error: ", err)
-		panic(err)
-	}
-
-	dbName, collectionName := config.GetEnv(DatabaseName, ""), config.GetEnv(WordsCollectionName, "")
-
-	collection := client.Database(dbName).Collection(collectionName)
-
-	zap.S().Info("Connected to MongoDB!")
 	return &repository{
-		client:          client,
 		wordsCollection: collection,
+		nrc:             nrc,
 	}
 }
 
-func (r *repository) InsertWords(ctx context.Context, words *map[string]int, scid string) (*WordDocument, error) {
-
+func (r *repository) InsertWords(ctx context.Context, words map[string]int, scid string) (*WordDocument, error) {
+	defer r.nrc.Client.StartTransaction(fmt.Sprintf("%s: InsertWords", scid)).End()
 	wordDoc := WordDocument{
 		ID:                    primitive.NewObjectID(),
 		SubredditAndCommentId: scid,
-		Words:                 *words,
+		Words:                 words,
 		LastUpdated:           primitive.NewDateTimeFromTime(time.Now()),
 	}
 
+	r.upsertMu.Lock()
 	insertResult, err := r.wordsCollection.InsertOne(context.TODO(), wordDoc)
+	r.upsertMu.Unlock()
 
 	if err != nil {
 		zap.S().Errorf("Failed to insert word document into collection with scid %s: %w", scid, err)
@@ -83,10 +55,11 @@ func (r *repository) InsertWords(ctx context.Context, words *map[string]int, sci
 }
 
 func (r *repository) GetWordsFromLink(ctx context.Context, scid string) (*WordDocument, error) {
-
+	defer r.nrc.Client.StartTransaction(fmt.Sprintf("%s: GetWordsFromLink", scid)).End()
 	filter := bson.D{{Key: "scid", Value: scid}}
 
 	var result WordDocument
+
 	err := r.wordsCollection.FindOne(context.TODO(), filter).Decode(&result)
 
 	if err != nil {
@@ -100,12 +73,30 @@ func (r *repository) GetWordsFromLink(ctx context.Context, scid string) (*WordDo
 	return &result, nil
 }
 
-func (r *repository) Disconnect() {
-	zap.S().Info("Disconnecting MongoDB client....")
+func (r *repository) Upsert(ctx context.Context, words map[string]int, scid string) error {
+	defer r.nrc.Client.StartTransaction(fmt.Sprintf("%s: Upsert", scid)).End()
+	filter := bson.D{{Key: "scid", Value: scid}}
 
-	ctx, cancel := context.WithTimeout(context.Background(), 10*time.Second)
-	defer cancel()
-	r.client.Disconnect(ctx)
+	r.upsertMu.Lock()
+	wordDoc, err := r.GetWordsFromLink(ctx, scid)
 
-	zap.S().Info("Disconnected MongoDB client.")
+	if err != nil {
+		return err
+	}
+
+	if wordDoc != nil {
+		wordDoc.Words = util.CombineMaps(wordDoc.Words, words)
+	}
+
+	update := bson.M{
+		"$set": wordDoc,
+	}
+
+	if _, err = r.wordsCollection.UpdateOne(ctx, filter, update); err != nil {
+		zap.S().Errorf("Error upserting WordDocument %s to MongoDb: %w", scid, err)
+		return fmt.Errorf("could not upsert: %w", err)
+	}
+	r.upsertMu.Unlock()
+
+	return nil
 }
