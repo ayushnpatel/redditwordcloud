@@ -44,7 +44,7 @@ func InitRouter(healthHandler *health.Handler, redditHandler *reddit.Handler, nr
 
 	r.GET(HealthPath, healthHandler.GetHealth)
 	// r.GET(GetRedditThreadWordsByThreadIDPath, redditHandler.GetRedditThreadWordsByThreadIDHandler)
-	r.GET(GetRedditThreadWordsByLinkPath, redditHandler.GetRedditThreadWordsByLinkHandler)
+	r.POST(GetRedditThreadWordsByLinkPath, redditHandler.GetRedditThreadWordsByLinkHandler)
 }
 
 func Start(addr string) error {
