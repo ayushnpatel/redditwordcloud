@@ -380,7 +380,7 @@ func (svc *service) GetRedditThreadWordsByLink(c context.Context, req *GetReddit
 		if wordDocument != nil {
 			if util.IsInLastWeek(wordDocument.LastUpdated.Time()) {
 				zap.S().Debugf("Retrieved word document for %s from MongoDB Words Collection.", scid)
-				return &GetRedditThreadWordsRes{Words: wordDocument.Words, Success: true, Link: link.CommentId}, nil
+				return &GetRedditThreadWordsRes{Words: wordDocument.Words, Success: true, Link: scid}, nil
 			}
 		} else {
 			zap.S().Debugf("Scid %s does not exist in db. Inserting with empty map.", scid)
@@ -400,7 +400,7 @@ func (svc *service) GetRedditThreadWordsByLink(c context.Context, req *GetReddit
 		}(rr)
 	}
 
-	return &GetRedditThreadWordsRes{Success: true, Words: nil, Link: link.CommentId}, nil
+	return &GetRedditThreadWordsRes{Success: true, Words: nil, Link: scid}, nil
 }
 
 func (svc *service) getCommentArticleResp(commentId string, link *Link) ([]RedditResponse, error) {
