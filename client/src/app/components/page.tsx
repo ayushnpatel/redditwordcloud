@@ -26,7 +26,7 @@ type Color = (typeof colorList)[number];
 
 export default function ComponentPage() {
   const [mode, setMode] = React.useState<'dark' | 'light'>('light');
-  const [color, setColor] = React.useState<Color>('sky');
+  const [color, setColor] = React.useState<Color>('cyan');
   function toggleMode() {
     return mode === 'dark' ? setMode('light') : setMode('dark');
   }
@@ -36,7 +36,7 @@ export default function ComponentPage() {
   return (
     <main>
       <section
-        className={clsx(mode === 'dark' ? 'bg-dark' : 'bg-white', color)}
+        className={clsx(mode === 'dark' ? 'bg-dark' : ' bg-white', color)}
       >
         <div
           className={clsx(
@@ -435,27 +435,4 @@ export default function ComponentPage() {
   );
 }
 
-const colorList = [
-  'slate',
-  'gray',
-  'zinc',
-  'neutral',
-  'stone',
-  'red',
-  'orange',
-  'amber',
-  'yellow',
-  'lime',
-  'green',
-  'emerald',
-  'teal',
-  'cyan',
-  'sky',
-  'blue',
-  'indigo',
-  'violet',
-  'purple',
-  'fuchsia',
-  'pink',
-  'rose',
-] as const;
+const colorList = ['cyan', 'beige', 'violet'] as const;

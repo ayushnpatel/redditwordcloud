@@ -48,7 +48,7 @@ const Button = React.forwardRef<HTMLButtonElement, ButtonProps>(
         className={cn(
           'inline-flex items-center rounded font-medium',
           'focus-visible:ring-primary-500 focus:outline-none focus-visible:ring',
-          'shadow-sm',
+          'shadow-md',
           'transition-colors duration-75',
           //#region  //*=========== Size ===========
           [

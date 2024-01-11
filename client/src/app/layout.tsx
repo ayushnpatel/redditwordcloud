@@ -1,11 +1,14 @@
 import { Metadata } from 'next';
 import * as React from 'react';
 
+import { Cabin as FontSans } from 'next/font/google';
 import '@/styles/globals.css';
 // !STARTERCONF This is for demo purposes, remove @/styles/colors.css import immediately
 import '@/styles/colors.css';
 
 import { siteConfig } from '@/constant/config';
+import { cn } from '@/lib/utils';
+import { Providers } from '@/app/providers';
 
 // !STARTERCONF Change these default meta
 // !STARTERCONF Look at @/constant/config to change them
@@ -49,14 +52,40 @@ export const metadata: Metadata = {
   // ],
 };
 
+export const fontSans = FontSans({
+  subsets: ['latin'],
+  variable: '--font-sans',
+});
+
 export default function RootLayout({
   children,
 }: {
   children: React.ReactNode;
 }) {
   return (
-    <html>
-      <body>{children}</body>
+    <html suppressHydrationWarning>
+      <body
+        className={cn(
+          'min-h-screen bg-background font-sans antialiased',
+          fontSans.variable
+        )}
+      >
+        <script
+          dangerouslySetInnerHTML={{
+            __html: `
+            try {
+              if (localStorage.getItem("theme") === 'dark' || (localStorage.getItem("theme") === null && window.matchMedia('(prefers-color-scheme: dark)').matches)) {
+                  document.documentElement.classList.add('dark')
+              } else {
+                  document.documentElement.classList.remove('dark')
+              }
+            } catch (_) {}
+          `,
+          }}
+        ></script>
+
+        <Providers>{children}</Providers>
+      </body>
     </html>
   );
 }

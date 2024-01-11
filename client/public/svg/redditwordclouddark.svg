@@ -1,0 +1,68 @@
+<svg viewBox="0 0 500 500" xmlns="http://www.w3.org/2000/svg" xlink="http://www.w3.org/1999/xlink" bx="https://boxy-svg.com">
+  <defs>
+    <pattern id="pattern-1" viewBox="0 0 100 100" patternUnits="userSpaceOnUse" preserveAspectRatio="none" width="100" height="100" pinned="true">
+      <rect x="85.785" y="0.037" width="14.128" height="99.87" style="stroke: rgb(0, 0, 0); stroke-width: 0px; fill: rgb(26, 56, 56);"></rect>
+      <rect x="71.5" y="-0.141" width="14.471" height="99.87" style="stroke: rgb(0, 0, 0); stroke-width: 0px; fill: rgb(81, 64, 100);"></rect>
+      <rect x="57.229" y="-0.074" width="14.488" height="99.87" style="stroke: rgb(0, 0, 0); stroke-width: 0px; fill: rgb(39, 84, 84);"></rect>
+      <rect x="42.563" y="0.025" width="14.723" height="99.87" style="stroke: rgb(0, 0, 0); stroke-width: 0px; fill: rgb(101, 80, 124);"></rect>
+      <rect x="28.186" y="-0.048" width="14.397" height="99.87" style="stroke: rgb(0, 0, 0); stroke-width: 0px; fill: rgb(55, 65, 81);"></rect>
+      <rect x="13.976" y="-0.048" width="14.336" height="100.033" style="stroke: rgb(0, 0, 0); stroke-width: 0px; fill: rgb(120, 95, 149);"></rect>
+      <rect x="0.007" y="0.304" width="14.128" height="99.87" style="stroke: rgb(0, 0, 0); stroke-width: 0px; fill: rgb(64, 140, 140);"></rect>
+    </pattern>
+    <pattern id="pattern-1-3" patternTransform="matrix(1, 0, 0, 1.04413, 339.33026, -7.241332)" href="#pattern-1"></pattern>
+    <linearGradient id="gradient-1" pinned="true"></linearGradient>
+    <linearGradient id="gradient-2" pinned="true">
+      <stop style="stop-color: rgb(77, 168, 168);" offset="0"></stop>
+      <stop style="stop-color: rgb(55, 65, 81);" offset="1"></stop>
+    </linearGradient>
+    <linearGradient id="gradient-0">
+      <stop style="stop-color: rgb(185, 223, 223);" offset="0"></stop>
+      <stop style="stop-color: rgb(101, 184, 184);" offset="1"></stop>
+    </linearGradient>
+    <guide x="99.847" y="273.479" angle="90"></guide>
+    <guide x="101.09800122061426" y="306.391581501622" angle="90"></guide>
+    <guide x="123.24834103966722" y="184.78017184069984" angle="-180"></guide>
+    <guide x="367.07556579366354" y="201.25301804013952" angle="180"></guide>
+    <guide x="184.268" y="288.394" angle="-90"></guide>
+    <guide x="111.033" y="246.444" angle="-180"></guide>
+    <guide x="379.141" y="235.57" angle="180"></guide>
+    <pattern id="pattern-0" viewBox="0 0 100 100" patternUnits="userSpaceOnUse" preserveAspectRatio="none" width="100" height="100" pinned="true">
+      <rect x="84.433" width="15.567" height="100" style="stroke: rgb(0, 0, 0); stroke-width: 0px; fill: rgb(234, 230, 239);"></rect>
+      <rect x="70.835" width="13.598" height="100" style="stroke: rgb(0, 0, 0); stroke-width: 0px; fill: rgb(185, 223, 223);"></rect>
+      <rect x="57.155" width="13.68" height="100" style="stroke: rgb(0, 0, 0); stroke-width: 0px; fill: rgb(203, 193, 215);"></rect>
+      <rect x="43.805" width="13.35" height="100" style="stroke: rgb(0, 0, 0); stroke-width: 0px; fill: rgb(129, 197, 197);"></rect>
+      <rect x="28.572" width="15.233" height="100" style="stroke: rgb(0, 0, 0); stroke-width: 0px; fill: rgb(203, 193, 215);"></rect>
+      <rect x="14.093" width="14.479" height="100" style="stroke: rgb(0, 0, 0); stroke-width: 0px; fill: rgb(157, 210, 210);"></rect>
+      <rect width="14.093" height="100" style="stroke: rgb(0, 0, 0); stroke-width: 0px; fill: rgb(234, 230, 239);"></rect>
+    </pattern>
+    <pattern id="pattern-0-0" patternTransform="matrix(1, 0, 0, 1, 206, 205.999992)" href="#pattern-0"></pattern>
+    <pattern id="pattern-0-1" patternTransform="matrix(1, 0, 0, 1, 117.57299, 111.448502)" href="#pattern-0"></pattern>
+    <pattern id="pattern-0-2" patternTransform="matrix(1, 0, 0, 1, 339.33017, -5.034781)" href="#pattern-0"></pattern>
+    <pattern id="pattern-0-3" patternTransform="matrix(1, 0, 0, 1, 296.734497, 9.641998)" href="#pattern-0"></pattern>
+    <linearGradient id="gradient-0-0" gradientUnits="userSpaceOnUse" x1="171.335" y1="172.104" x2="171.335" y2="220.898" href="#gradient-0"></linearGradient>
+    <linearGradient id="gradient-0-1" gradientUnits="userSpaceOnUse" x1="319.022" y1="171.269" x2="319.022" y2="220.063" href="#gradient-0"></linearGradient>
+    <linearGradient id="gradient-0-2" gradientUnits="userSpaceOnUse" x1="247.533" y1="259.287" x2="247.533" y2="312.438" href="#gradient-0"></linearGradient>
+  </defs>
+  <g transform="matrix(0.970237, 0, 0, 0.974112, 0.847127, -39.678932)" style="">
+    <g>
+      <g>
+        <path d="M489.579,254.766c-12.942-16.932-30.829-29.887-50.839-36.933c-0.828-48.454-40.501-87.618-89.148-87.618
+				c-7.618,0-15.213,0.993-22.647,2.958c-12.102-15.076-27.37-27.615-44.441-36.457c-19.642-10.173-40.881-15.331-63.127-15.331
+				c-74.705,0-135.736,59.676-137.931,133.859C33.885,227.82,0,271.349,0,321.107c0,60.383,49.125,109.508,109.508,109.508h292.983
+				C462.875,430.615,512,381.49,512,321.107C512,296.896,504.246,273.956,489.579,254.766z M402.491,415.061H109.508
+				c-51.806,0-93.953-42.147-93.953-93.953c0-44.549,31.647-83.274,75.248-92.079l6.342-1.281l-0.106-6.47
+				c-0.008-0.465-0.036-0.923-0.069-1.38c-0.012-0.173-0.031-0.344-0.031-0.52c0-67.512,54.925-122.437,122.436-122.437
+				c39.135,0,75.005,18.162,98.411,49.828l3.349,4.53l5.348-1.769c7.542-2.494,15.317-3.759,23.108-3.759
+				c40.587,0,73.606,33.019,73.606,73.607c0,0.645-0.05,1.382-0.103,2.164c-0.034,0.505-0.067,1.011-0.093,1.518l-0.303,6.145
+				l5.911,1.709c19.171,5.544,36.435,17.369,48.61,33.297c12.577,16.453,19.224,36.127,19.224,56.895
+				C496.445,372.913,454.297,415.061,402.491,415.061z" style="fill: url(#pattern-0-0);"></path>
+        <path d="M135.62,193.401h15.555c0-26.66,21.69-48.35,48.351-48.35v-15.555C164.289,129.495,135.62,158.163,135.62,193.401z" style="fill: url(#pattern-0-1);"></path>
+      </g>
+    </g>
+  </g>
+  <path style="stroke: rgb(0, 0, 0); stroke-width: 0px; fill: url(#pattern-0);" d="M 313.018 84.987 L 324.907 32.896 C 324.907 32.896 331.018 18.78 346.99 25.817 C 362.962 32.854 380.451 37.155 380.451 37.155 L 372.809 48.149 L 337.345 35.966 L 323.483 95.433 L 313.018 84.987 Z"></path>
+  <path  style="fill: url(#pattern-0);;" d="M 385.075 28.774 C 388.651 28.575 397.199 29.353 400.476 32.514 C 403.652 35.578 405.29 42.654 404.774 47.099 C 404.282 51.343 401.185 56.395 397.969 58.692 C 394.819 60.943 389.403 61.609 385.792 60.935 C 382.416 60.307 378.817 58.305 376.838 55.326 C 374.618 51.985 373.29 45.283 373.972 41.116 C 374.603 37.263 377.907 33.03 380.061 31.018 C 381.664 29.521 382.739 28.905 385.075 28.774 Z"></path>
+  <ellipse style="stroke: rgb(0, 0, 0); fill: url(#gradient-0-0);" cx="171.335" cy="196.501" rx="23.992" ry="24.397"></ellipse>
+  <ellipse style="stroke: rgb(0, 0, 0); fill: url(#gradient-0-1);" cx="319.022" cy="195.666" rx="23.992" ry="24.397"></ellipse>
+  <path style="stroke: rgb(0, 0, 0); stroke-miterlimit: 6.08; stroke-linecap: round; fill: url(#gradient-0-2);" d="M 125.074 264.166 C 158.899 314.282 364.199 302.155 366.304 264.322 C 383.224 253.013 393.616 268.148 381.43 280.8 C 363.546 323.302 137.786 323.283 111.824 278.92 C 101.019 260.456 118.099 253.832 125.074 264.166 Z"></path>
+</svg>
